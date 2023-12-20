@@ -1,0 +1,109 @@
+#This files uses the NPL approach to estimate the parameters in the dynamic game example of AM07
+
+# Load
+model estimate_NPL.mod;
+data estimate_Used.dat;
+
+# Settings
+# option solver knitroampl;
+option solver knitro;
+option knitro_options "outlev=4 maxit=100 opttol=1e-6 feastol=1e-6";
+
+param P_k { i in I, (xs,xa) in X, a in A};
+param P_diff { i in I, (xs,xa) in X, a in A};
+
+param P_diff_norm;
+
+param theta_RS_kminus1;
+param theta_RN_kminus1;
+
+param theta_RS_diff;
+param theta_RN_diff;
+
+param NPLtol default 1.e-6;
+param NPLIter;
+
+param NPLtime;
+param NPLtime_kminus1;
+
+# Initialize
+let NPLIter := 0;
+let theta_RS_kminus1 := 0;
+let theta_RN_kminus1 := 0;
+let NPLtime_kminus1 := 0;
+
+let {i in I} theta_FC_hat[i] := theta_FC[i];
+let theta_RS_hat := theta_RS;
+let theta_EC_hat := theta_EC;
+let theta_RN_hat := theta_RN;
+let NPLtime := 0;
+
+let {i in I, (xs,xa) in X, a in A} P_kminus1[i,xs,xa,a] := P_start[i,xs,xa]^a * (1-P_start[i,xs,xa])^(1-a);
+let {i in I, (xs,xa) in X} V[i,xs,xa] := V_start[i,xs,xa];
+
+for {s in 1..250} {
+
+	let NPLIter := s;
+
+        let {i in I, (xs,xa) in X} V[i,xs,xa] := sum {a in A} P_kminus1[i,xs,xa,a]*(epayoff[i,xs,xa,a] + e[i,xs,xa,a]) + beta*(sum {(xsnext,xanext) in X} V[i,xsnext,xanext]*fP[xsnext,xanext,xs,xa]);
+
+        let  {i in I, (xs,xa) in X} P[i,xs,xa,1] :=exp(Vchoice[i,xs,xa,1])/(sum {a in A} exp(Vchoice[i,xs,xa,a]));
+
+        let  {i in I, (xs,xa) in X} P[i,xs,xa,0] := 1 - P[i,xs,xa,1];
+
+	fix theta_EC_hat;
+	fix theta_FC_hat;
+	
+        solve AM07_NPL;
+
+        let {i in I, (xs,xa) in X, a in A} P_diff[i,xs,xa,a] := P_kminus1[i,xs,xa,a] - P[i,xs,xa,a]; 
+  	let P_diff_norm := max {i in I, (xs,xa) in X, a in A} abs(P_diff[i,xs,xa,a]);
+  	let theta_RS_diff := theta_RS_hat - theta_RS_kminus1;
+        let theta_RN_diff := theta_RN_hat - theta_RN_kminus1;
+  	let NPLtime := NPLtime_kminus1 + _solve_time;
+
+        display s;
+	display theta_RS_hat;
+        display theta_RN_hat;
+  	display P_diff_norm;
+  	display theta_RS_diff; 
+	display theta_RN_diff; 
+        display max( P_diff_norm, abs(theta_RS_diff), abs(theta_RN_diff) );
+
+        if max( P_diff_norm, abs(theta_RS_diff), abs(theta_RN_diff) ) <= NPLtol then break;
+ 
+        let {i in I, (xs,xa) in X, a in A} P_kminus1[i,xs,xa,a] := P[i,xs,xa,a];
+ 	let theta_RS_kminus1 := theta_RS_hat;
+	let theta_RN_kminus1 := theta_RN_hat;
+        let NPLtime_kminus1 := NPLtime;
+}
+# Record
+
+for {i in I} {
+	printf "%.12e \n", theta_FC_hat[i] > output_estimate/NPL_theta_FC.sol;
+}
+printf "%.12e \n", theta_RS_hat > output_estimate/NPL_theta_RS.sol;
+printf "%.12e \n", theta_EC_hat > output_estimate/NPL_theta_EC.sol;
+printf "%.12e \n", theta_RN_hat > output_estimate/NPL_theta_RN.sol;
+
+for {i in I, (xs,xa) in X} {
+	printf "%.12e \n", P[i,xs,xa,1] > output_estimate/NPL_EstP.sol;}
+
+
+if  max( P_diff_norm, abs(theta_RS_diff), abs(theta_RN_diff) ) <= NPLtol then { 
+			printf "%s\n", "NPL solution found" > output_estimate/NPL_outmsg.txt;
+                        printf "%5.0f \n", 0 > output_estimate/NPL_KnitroExit.sol ; 
+			}
+		else { 
+			printf "%s\n", "NPL Iteration limit reached" > output_estimate/NPL_outmsg.txt;
+                        printf "%5.0f \n", 400 > output_estimate/NPL_KnitroExit.sol ; 
+            }
+
+	
+printf "%s \n", solve_message > output_estimate/NPL_KnitroMessage.sol;
+
+printf "%.12e \n", NPLobj > output_estimate/NPL_LogLikelihood.sol;
+
+printf "%.12e \n", NPLtime > output_estimate/NPL_solvetime.sol;
+
+printf "%.12e \n", NPLIter > output_estimate/NPL_Iter.sol;

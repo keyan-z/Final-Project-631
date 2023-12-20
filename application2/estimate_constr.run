@@ -1,0 +1,60 @@
+#This files estimates parameters using a constrained approach
+
+# Load
+model estimate_constr.mod;
+data estimate_Used.dat;
+
+# Settings
+# option solver knitroampl;
+option solver knitro;
+option knitro_options "outlev=3 maxit=50 opttol=1e-6 feastol=1e-6";
+
+# Initialize
+let {i in I} theta_FC_hat[i] := theta_FC[i];
+let theta_RS_hat := theta_RS;
+let theta_EC_hat := theta_EC;
+let theta_RN_hat := theta_RN;
+
+let {i in I, (xs,xa) in X, a in A} P[i,xs,xa,a] := P_start[i,xs,xa]^a * (1-P_start[i,xs,xa])^(1-a);
+let {i in I, (xs,xa) in X} V[i,xs,xa] := V_start[i,xs,xa];
+
+fix theta_EC_hat;
+fix theta_FC_hat;
+
+solve;
+
+# Record
+
+for {i in I} {
+	printf "%.12e \n", theta_FC_hat[i] > output_estimate/MLE_theta_FC.sol;
+}
+printf "%.12e \n", theta_RS_hat > output_estimate/MLE_theta_RS.sol;
+printf "%.12e \n", theta_EC_hat > output_estimate/MLE_theta_EC.sol;
+printf "%.12e \n", theta_RN_hat > output_estimate/MLE_theta_RN.sol;
+for {i in I, (xs,xa) in X} {
+	printf "%.12e \n", P[i,xs,xa,1] > output_estimate/MLE_EstP.sol;
+}
+
+
+if match (solve_message, "Locally optimal solution") > 0 then { 
+			printf "%s\n", "Optimal solution found" > output_estimate/MLE_outmsg.txt;
+                        printf "%5.0f \n", 0 > output_estimate/MLE_KnitroExit.sol ; 
+			}
+		else if match (solve_message, "Iteration limit reached") > 0 then { 
+			printf "%s\n", "Iteration limit reached" > output_estimate/MLE_outmsg.txt;
+                        printf "%5.0f \n", 400 > output_estimate/MLE_KnitroExit.sol ; 
+			}
+                else if match (solve_message, "Evaluation error") > 0 then { 
+			printf "%s\n", "Evaluation error" > output_estimate/MLE_outmsg.txt;
+			printf "%5.0f \n", 502 > output_constr/MLE_KnitroExit.sol ; 
+			}
+                else {
+			printf "%s\n", "No solution" > output_estimate/MLE_outmsg.txt;
+			printf "%5.0f \n", 1000 > output_estimate/MLE_KnitroExit.sol ; 
+            }
+	
+printf "%s \n", solve_message > output_estimate/MLE_KnitroMessage.sol;
+
+printf "%.12e \n", LogLikelihood > output_estimate/MLE_LogLikelihood.sol;
+
+printf "%.12e \n", _solve_time > output_estimate/MLE_solvetime.sol;
