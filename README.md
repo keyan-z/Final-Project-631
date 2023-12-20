@@ -1,6 +1,9 @@
 # Final-Project-631
 
 
+Part of the implementation is adapted from Su and Judd (2012) and Egesdal et al. (2015).
+
+
 **References**
 
 Victor Aguirregabiria and Pedro Mira. Sequential estimation of dynamic discrete games.
